@@ -65,14 +65,16 @@ jobs:
 
       - name: Create Pull Request
         if: steps.vars.outputs.env != 'dev'
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITOPS_PAT }}
-          path: minikube
-          base: main
-          branch: ${{ steps.vars.outputs.branch }}
-          title: "Update hello-nginx-1 for ${{ steps.vars.outputs.env }}"
-          body: "This PR updates the image tag to `${{ steps.vars.outputs.tag }}` in ${{ steps.vars.outputs.env }}."
+        run: |
+          gh pr create \
+            --repo cristalcorp/minikube \
+            --head ${{ steps.vars.outputs.branch }} \
+            --base main \
+            --title "Update hello-nginx-1 for ${{ steps.vars.outputs.env }}" \
+            --body "This PR updates the image tag to \`${{ steps.vars.outputs.tag }}\` in ${{ steps.vars.outputs.env }}."
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITOPS_PAT }}
 
       - name: Auto-commit to dev (no PR)
         if: steps.vars.outputs.env == 'dev'
