@@ -21,18 +21,21 @@ jobs:
       - name: Set image tag based on branch/tag
         id: vars
         run: |
+          NOW=$(date +%s)
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             ENV="prod"
           elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
-            TAG="staging-${GITHUB_SHA::7}-$(date +%s)"
+            TAG="staging-${GITHUB_SHA::7}-$NOW"
             ENV="staging"
           else
-            TAG="dev-${GITHUB_SHA::7}-$(date +%s)"
+            TAG="dev-${GITHUB_SHA::7}-$NOW"
             ENV="dev"
           fi
+          BRANCH="update-$ENV-$TAG"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITOPS_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -51,15 +54,15 @@ jobs:
 
       - name: Create Git branch for env change
         run: |
+          set -x
           cd minikube
-          BRANCH=update-${{ steps.vars.outputs.env }}-${{ steps.vars.outputs.tag }}
           git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
           git config user.email "ci@github.actions"
-          git checkout -b $BRANCH
+          git checkout -b ${{ steps.vars.outputs.branch }}
           yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
-          git push origin $BRANCH
+          git push origin ${{ steps.vars.outputs.branch }}
 
       - name: Show Git status before commit
         run: |
@@ -79,7 +82,7 @@ jobs:
           token: ${{ secrets.GITOPS_PAT }}
           path: minikube
           base: main
-          branch: update-${{ steps.vars.outputs.env }}-${{ steps.vars.outputs.tag }}
+          branch: ${{ steps.vars.outputs.branch }}
           title: "Update hello-nginx-1 for ${{ steps.vars.outputs.env }}"
           body: "This PR updates the image tag to `${{ steps.vars.outputs.tag }}` in ${{ steps.vars.outputs.env }}."
 
