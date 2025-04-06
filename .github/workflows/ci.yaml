@@ -21,15 +21,14 @@ jobs:
       - name: Set image tag based on branch/tag
         id: vars
         run: |
-          NOW=$(date +%s)
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             ENV="prod"
           elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
-            TAG="staging-${GITHUB_SHA::7}-$NOW"
+            TAG="${GITHUB_SHA::7}"
             ENV="staging"
           else
-            TAG="dev-${GITHUB_SHA::7}-$NOW"
+            TAG="${GITHUB_SHA::7}"
             ENV="dev"
           fi
           BRANCH="update-$ENV-$TAG"
@@ -63,9 +62,11 @@ jobs:
           git rebase origin/main
           echo "File content before changing:"
           grep tag: apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          cat minikube/apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           echo "File content after changing using yq:"
           grep tag: apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          cat minikube/apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
           git status
