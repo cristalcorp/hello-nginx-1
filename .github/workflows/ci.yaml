@@ -67,9 +67,9 @@ jobs:
           git status
           git diff
 
-    - name: Show updated values.yaml
-      run: |
-        cat minikube/apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+      - name: Show updated values.yaml
+        run: |
+          cat minikube/apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
 
 
       - name: Create Pull Request
