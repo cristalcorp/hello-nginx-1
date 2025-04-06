@@ -1,0 +1,91 @@
+name: Deploy Hello NGINX 1
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ghcr.io/cristalcorp/hello-nginx-1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set image tag based on branch/tag
+        id: vars
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            ENV="prod"
+            BRANCH="update-$ENV-$TAG"
+          elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
+            TAG="staging-${GITHUB_SHA::7}"
+            ENV="staging"
+            BRANCH="update-$TAG"
+          else
+            TAG="dev-${GITHUB_SHA::7}"
+            ENV="dev"
+            BRANCH="update-$TAG"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITOPS_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t $IMAGE_NAME:${{ steps.vars.outputs.tag }} .
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.tag }}
+
+      - name: Clone GitOps repo (minikube)
+        run: |
+          git clone https://x-access-token:${{ secrets.GITOPS_PAT }}@github.com/cristalcorp/minikube.git
+
+      - name: Create Git branch for env change
+        run: |
+          cd minikube
+          git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
+          git config user.email "ci@github.actions"
+          git switch -c ${{ steps.vars.outputs.branch }}
+          grep tag: apps/hello-nginx-1/staging/values.yaml
+          yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          grep tag: apps/hello-nginx-1/staging/values.yaml
+          git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
+          git push origin ${{ steps.vars.outputs.branch }}
+
+      - name: Clean up untracked or residual changes
+        run: |
+          cd minikube
+          git status
+          git clean -fd
+          git reset --hard
+
+      - name: Create Pull Request
+        if: steps.vars.outputs.env != 'dev'
+        run: |
+          gh pr create \
+            --repo cristalcorp/minikube \
+            --head ${{ steps.vars.outputs.branch }} \
+            --base main \
+            --title "Update hello-nginx-1 for ${{ steps.vars.outputs.env }}" \
+            --body "This PR updates the image tag to \`${{ steps.vars.outputs.tag }}\` in ${{ steps.vars.outputs.env }}."
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITOPS_PAT }}
+
+      - name: Auto-commit to dev (no PR)
+        if: steps.vars.outputs.env == 'dev'
+        run: |
+          cd minikube
+          git push origin HEAD:main
+
