@@ -63,6 +63,13 @@ jobs:
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
           git push origin ${{ steps.vars.outputs.branch }}
 
+      - name: Clean up untracked or residual changes
+        run: |
+          cd minikube
+          git status
+          git clean -fd
+          git reset --hard
+
       - name: Create Pull Request
         if: steps.vars.outputs.env != 'dev'
         run: |
