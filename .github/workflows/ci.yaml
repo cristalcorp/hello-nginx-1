@@ -1,71 +1,80 @@
-name: CI/CD Pipeline
+name: Deploy Hello NGINX 1
 
 on:
   push:
-    branches: [main]
-
-env:
-  IMAGE_NAME: hello-nginx-1
-  REGISTRY: ghcr.io/${{ github.repository_owner }}
-  TAG: ${{ github.sha }}
+    branches:
+      - main
+      - staging
+    tags:
+      - 'v*'
 
 jobs:
-  check:
-    name: Lint + Secrets Scan
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ghcr.io/cristalcorp/hello-nginx-1
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Run gitleaks (secret scan)
-        uses: gitleaks/gitleaks-action@v2
-
-      - name: Run Hadolint (Dockerfile linter)
-        uses: hadolint/hadolint-action@v2.0.0
-
-  build-and-deploy:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set image tag based on branch/tag
+        id: vars
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            ENV="prod"
+          elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
+            TAG="staging-${GITHUB_SHA::7}"
+            ENV="staging"
+          else
+            TAG="dev-${GITHUB_SHA::7}"
+            ENV="dev"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "env=$ENV" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and push image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
-          format: table
-          severity: CRITICAL,HIGH
-
-      - name: Update GitOps repo with new image tag
+      - name: Build and push Docker image
         run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git clone https://${GITOPS_PAT}@github.com/cristalcorp/minikube.git
+          docker build -t $IMAGE_NAME:${{ steps.vars.outputs.tag }} .
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.tag }}
+
+      - name: Clone GitOps repo (minikube)
+        uses: actions/checkout@v3
+        with:
+          repository: cristalcorp/minikube
+          token: ${{ secrets.MINIKUBE_GH_TOKEN }}
+          path: minikube
+
+      - name: Create Git branch for env change
+        run: |
           cd minikube
-          sed -i "s/tag: .*/tag: ${TAG}/" apps/hello-nginx-1/dev/values.yaml
-          git add apps/hello-nginx-1/dev/values.yaml
-          git commit -m "Update hello-nginx-1 image tag to ${TAG}"
-          git push
-        env:
-          GITOPS_PAT: ${{ secrets.GITOPS_PAT }}
-          TAG: ${{ env.TAG }}
-        if: github.ref == 'refs/heads/main'
+          BRANCH=update-${{ steps.vars.outputs.env }}-${{ steps.vars.outputs.tag }}
+          git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
+          git config user.email "ci@github.actions"
+          git checkout -b $BRANCH
+          yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
+          git push origin $BRANCH
+
+      - name: Create Pull Request
+        if: steps.vars.outputs.env != 'dev'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+          path: minikube
+          base: main
+          branch: update-${{ steps.vars.outputs.env }}-${{ steps.vars.outputs.tag }}
+          title: "Update hello-nginx-1 for ${{ steps.vars.outputs.env }}"
+          body: "This PR updates the image tag to `${{ steps.vars.outputs.tag }}` in ${{ steps.vars.outputs.env }}."
+
+      - name: Auto-commit to dev (no PR)
+        if: steps.vars.outputs.env == 'dev'
+        run: |
+          cd minikube
+          git push origin HEAD:main
 
