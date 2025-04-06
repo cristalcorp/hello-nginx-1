@@ -58,15 +58,15 @@ jobs:
           git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
           git config user.email "ci@github.actions"
           git checkout -b ${{ steps.vars.outputs.branch }}
-          git fetch origin
-          git rebase origin/main
+          #git fetch origin
+          #git rebase origin/main
           echo "File content before changing:"
           grep tag: apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
-          cat minikube/apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          cat apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           echo "File content after changing using yq:"
           grep tag: apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
-          cat minikube/apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          cat apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
           git status
