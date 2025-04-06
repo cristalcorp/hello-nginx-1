@@ -56,7 +56,8 @@ jobs:
           git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
           git config user.email "ci@github.actions"
           git checkout -b $BRANCH
-          yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          sed -i "s/^  tag: .*/  tag: ${{ steps.vars.outputs.tag }}/" apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          #yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
           git push origin $BRANCH
