@@ -47,32 +47,19 @@ jobs:
           docker push $IMAGE_NAME:${{ steps.vars.outputs.tag }}
 
       - name: Clone GitOps repo (minikube)
-        uses: actions/checkout@v3
-        with:
-          repository: cristalcorp/minikube
-          token: ${{ secrets.GITOPS_PAT }}
-          path: minikube
+        run: |
+          git clone https://x-access-token:${{ secrets.GITOPS_PAT }}@github.com/cristalcorp/minikube.git
 
       - name: Create Git branch for env change
         run: |
-          set -x
+          #set -x
           cd minikube
           git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
           git config user.email "ci@github.actions"
-          git checkout -b ${{ steps.vars.outputs.branch }}
-          #git fetch origin
-          #git rebase origin/main
-          echo "File content before changing:"
-          grep tag: apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
-          cat apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          git switch -c ${{ steps.vars.outputs.branch }}
           yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
-          echo "File content after changing using yq:"
-          grep tag: apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
-          cat apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
-          git status
-          git diff
           git push origin ${{ steps.vars.outputs.branch }}
 
       - name: Create Pull Request
