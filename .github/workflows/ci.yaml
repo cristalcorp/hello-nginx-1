@@ -22,13 +22,13 @@ jobs:
         id: vars
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${GITHUB_REF#refs/tags/}"-$(echo $RANDOM)
             ENV="prod"
           elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
-            TAG="staging-${GITHUB_SHA::7}"
+            TAG="staging-${GITHUB_SHA::7}"-$(echo $RANDOM)
             ENV="staging"
           else
-            TAG="dev-${GITHUB_SHA::7}"
+            TAG="dev-${GITHUB_SHA::7}"-$(echo $RANDOM)
             ENV="dev"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -56,8 +56,7 @@ jobs:
           git config user.name "${{ secrets.MINIKUBE_GH_USERNAME }}"
           git config user.email "ci@github.actions"
           git checkout -b $BRANCH
-          sed -i "s/^  tag: .*/  tag: ${{ steps.vars.outputs.tag }}/" apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
-          #yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
+          yq e -i '.image.tag = "${{ steps.vars.outputs.tag }}"' apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git add apps/hello-nginx-1/${{ steps.vars.outputs.env }}/values.yaml
           git commit -m "Update hello-nginx-1 image to ${{ steps.vars.outputs.tag }} in ${{ steps.vars.outputs.env }}"
           git push origin $BRANCH
