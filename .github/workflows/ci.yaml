@@ -24,14 +24,16 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             ENV="prod"
+            BRANCH="update-$ENV-$TAG"
           elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
-            TAG="${GITHUB_SHA::7}"
+            TAG="staging-${GITHUB_SHA::7}"
             ENV="staging"
+            BRANCH="update-$TAG"
           else
-            TAG="${GITHUB_SHA::7}"
+            TAG="dev-${GITHUB_SHA::7}"
             ENV="dev"
+            BRANCH="update-$TAG"
           fi
-          BRANCH="update-$ENV-$TAG"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "env=$ENV" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
