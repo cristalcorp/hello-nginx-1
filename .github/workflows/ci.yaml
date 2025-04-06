@@ -22,13 +22,13 @@ jobs:
         id: vars
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"-$(echo $RANDOM)
+            TAG="${GITHUB_REF#refs/tags/}"
             ENV="prod"
           elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
-            TAG="staging-${GITHUB_SHA::7}"-$(echo $RANDOM)
+            TAG="staging-${GITHUB_SHA::7}-$(date +%s)"
             ENV="staging"
           else
-            TAG="dev-${GITHUB_SHA::7}"-$(echo $RANDOM)
+            TAG="dev-${GITHUB_SHA::7}-$(date +%s)"
             ENV="dev"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
